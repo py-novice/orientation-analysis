@@ -17,7 +17,6 @@ import skimage.transform
 import multiprocessing as mp
 from tqdm import tqdm
 from structure_tensor import parallel_structure_tensor_analysis
-from pyevtk.hl import gridToVTK
 import matplotlib.pyplot as plt
 import nibabel as nib
 
@@ -262,6 +261,7 @@ def chunk_split(volume, split_amount, padding):
 
 
 if __name__ == '__main__':
+    # Main Program
 
     #sigma = 1 # noise scale
     #rho = 10 # integration scale
@@ -272,9 +272,7 @@ if __name__ == '__main__':
         sys.exit('\033[93m'+\
                  'Please enter a value for ' + '\033[95m'+\
                  'sigma' + '\033[93m'+ ' and ' + '\033[95m'+ 'rho' + '\033[93m' +\
-                 ' followed by '+ '\033[95m'+ 'True' + '\033[93m'+\
-                 ' or ' + '\033[95m'+ 'False' + '\033[93m'+\
-                 ' after function name e.g. dataProcessing3d.py 1 10 False' +'\033[0m')
+                 ' after function name e.g. dataProcessing3d.py 1 10' +'\033[0m')
 
     sigma = int(sys.argv[1])
     rho = int(sys.argv[2])

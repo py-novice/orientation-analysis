@@ -38,7 +38,7 @@ def colouring(vec):
     rgba[..., 2] = b.reshape(input_shape[1:])
 
     # rgba *= 255  # normalise data
-    rgba = rgba.astype(np.uint8)  # convert to uint8 to reduce array size
+    # rgba = rgba.astype(np.uint8)  # convert to uint8 to reduce array size
     del tmp
     return rgba
 
@@ -54,10 +54,10 @@ if __name__ == '__main__':
         sys.exit('No file was selected to be processed')
 
     # ask user location to save results
-    save_filename = filedialog.asksaveasfilename(title='select location and enter name of file to save results')
+    save_filename = filedialog.asksaveasfilename(title='Select location and enter name of file to save results')
     root.destroy()
     if save_filename == '':  # asksaveasfile return `none` if dialog closed with "cancel".
-        sys.exit('no file name or location was selected to save results')
+        sys.exit('No file name or location was selected to save results')
 
     # Import nifti file
     print('Importing data...')
