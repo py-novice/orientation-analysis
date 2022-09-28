@@ -30,7 +30,10 @@ if __name__ == '__main__':
     root.withdraw()
 
     # ask user to select image and load image using ui
-    filename = filedialog.askopenfile(title='select vector file to process')
+    filename = filedialog.askopenfile(title='select vector data file to process')
+    if not filename:
+        # handles when askopenfile dialog is closed with "cancel".
+        sys.exit('No file was selected to be processed')
     answer = askyesno(title='Include FA Data?', message='Do you want to include FA data?')
     if answer:
         filename_fa = filedialog.askopenfile(title='select FA file to process')
@@ -70,7 +73,7 @@ if __name__ == '__main__':
     else:
         pool = mp.Pool(mp.cpu_count())
 
-    # find r
+    # find red values
     print('Calculating Red values...')
     t1 = time.perf_counter()  # start time
     vec_chunks = np.array_split(vec[2], pool._processes, axis=0)  # split array into chunks to be parallel processed
@@ -81,10 +84,10 @@ if __name__ == '__main__':
     t2 = time.perf_counter()  # stop time
     print(f'finished calculating red values in {t2 - t1} seconds')
 
-    # find b
+    # find blue values
     print('Calculating Blue values...')
     t1 = time.perf_counter()  # start time
-    vec_chunks = np.array_split(vec[0], pool._processes, axis=0)  # split array into chunks to be parallel processed
+    vec_chunks = np.array_split(vec[1], pool._processes, axis=0)  # split array into chunks to be parallel processed
     b = list(tqdm(pool.imap(convert2rgb, [chunk_coh for chunk_coh in vec_chunks]),
                     total=len(vec_chunks)))  # calculates red channel using parallel processing
     b_result = np.concatenate(b, axis=0)  # joins array chunks back into one
@@ -92,10 +95,10 @@ if __name__ == '__main__':
     t2 = time.perf_counter()  # stop time
     print(f'finished calculating blue values in {t2 - t1} seconds')
 
-    # find g
+    # find green values
     print('Calculating Green values...')
     t1 = time.perf_counter()  # start time
-    vec_chunks = np.array_split(vec[1], pool._processes, axis=0)  # split array into chunks to be parallel processed
+    vec_chunks = np.array_split(vec[0], pool._processes, axis=0)  # split array into chunks to be parallel processed
     g = list(tqdm(pool.imap(convert2rgb, [chunk_coh for chunk_coh in vec_chunks]),
                     total=len(vec_chunks)))  # calculates red channel using parallel processing
     g_result = np.concatenate(g, axis=0)  # joins array chunks back into one

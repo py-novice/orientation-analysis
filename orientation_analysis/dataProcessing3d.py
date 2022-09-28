@@ -22,113 +22,6 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 
 
-def write_tvk_file(coh, vec, val, step, save_filename, order, chunk_z_spacing, sigma, rho, pool):
-    # function to shape results into the correct format for writing to a tvk file.
-    # input:
-    #       coh = 3-d numpy array containing the calculated coherence values.
-    #       vec = 4-d numpy array containing calculated eigenvector results.
-    #       val = 3-d numpy array containing calculated eigenvalue results.
-    #       step = integer which determines the amount to downsample the data by. e.g. 1 would mean no down-sampling
-    #       save_filename = string containing location where and name to save the results.
-    #       order = integer indicating the position of the chunk of data that is being saved.
-    #       chunk_z_spacing = 1-d tuple array containing the z-dimension of the every chunk.
-    #       sigma = integer, single value used for calculating st
-    #       rho = integer, single value used for calculating st
-
-    nth_term = step     # how many terms to downsample data by
-
-    # eigenvectors
-    vx = vec[2, :, ::nth_term, ::nth_term]
-    vy = vec[1, :, ::nth_term, ::nth_term]
-    vz = vec[0, :, ::nth_term, ::nth_term]
-    dim = vx.shape
-
-    # rgb data
-    val_major = val[..., 0]     # red channel
-    val_minor1 = val[..., 1]    # green channel
-    val_minor2 = val[..., 2]    # blue channel
-
-    coh = coh[:, ::nth_term, ::nth_term]
-    coherence = coh.transpose(0, 1, 2).copy()
-
-    # generates grid and arranges into correct format.
-    if order == 0:
-        x, y, z = np.mgrid[0:dim[0], 0:dim[1], 0:dim[2]]
-    else:
-        start = 0
-        for j in range(order):
-            start = start + chunk_z_spacing[j]
-        x, y, z = np.mgrid[start:(start+dim[0]), 0:dim[1], 0:dim[2]]
-    pts = np.empty(z.shape + (3,), dtype=np.float32)
-    pts[..., 0] = x
-    pts[..., 1] = y
-    pts[..., 2] = z
-    pts = pts.transpose(3, 0, 1, 2)  # re-orders matrix so x first, y next and z last.
-
-    # arranges vector field data into correct format
-    vectors = np.empty(z.shape + (3,), dtype=np.float32)
-    vectors[..., 0] = vx
-    vectors[..., 1] = vy
-    vectors[..., 2] = vz
-    vectors = vectors.transpose(3, 0, 1, 2)
-
-    # arranges eigen-value data into correct format
-    values = np.empty(z.shape + (3,), dtype=np.float32)
-    values[..., 0] = val_major
-    values[..., 1] = val_minor1
-    values[..., 2] = val_minor2
-    values = values.transpose(3, 0, 1, 2)
-
-    # estimate size of results data to determine number of files to save processed data into
-    results_memory_size = (sys.getsizeof(pts)/ 1e6)*3  # estimates memory size of results and converts to mb
-    if results_memory_size >= 5000:       # if results data is larger than 5000mb (5gb), save results as multiple files
-        multi_file = True
-        split_amount = math.ceil(results_memory_size / 5000)  # number of sections/files to split the data into
-        print('\033[93m' + f'results too large for 1 file, saving results in {split_amount} files' + '\033[0m')
-    else:
-        multi_file = False
-
-    if multi_file:
-        # save data as multiple tvk files if too large
-        # split data into subsections along the x-axis
-        pts_split = np.array_split(pts, split_amount, axis=1)
-        vectors_split = np.array_split(vectors, split_amount, axis=1)
-        values_split = np.array_split(values, split_amount, axis=1)
-        coherence_split = np.array_split(coherence, split_amount, axis=0)
-
-        # create list of tuples containing split data
-        data= [None]*split_amount   # create empty list
-        for ij in range(split_amount):
-            save_filename_split = save_filename + "_processed_sigma=" + str(sigma) +\
-                                  "_rho=" + str(rho) + "_chunk" + str(order+1) +\
-                                  "_file" + str(ij+1)   # generates unique file name
-            itr = int(ij)
-            data[ij] = (pts_split[ij], vectors_split[ij], values_split[ij], coherence_split[ij],
-                        save_filename_split, itr)
-
-        for ik in tqdm(range(split_amount)):
-            tvk_write(data[ik])
-
-    else:
-        save_filename = save_filename + "_processed_sigma=" + str(sigma) + "_rho=" + str(rho) +\
-                        "_chunk" + str(order + 1)  # generates unique file name
-        data = [None]
-        data = (pts, vectors, values, coherence, save_filename, 0)
-        tvk_write(data)
-
-
-def tvk_write(data):
-    # function which calls gridToVTK and writes data to file
-    vectors_split_tuple = tuple(data[1])  # splits vector data into x,y and z matrices
-    values_split_tuple = tuple(data[2])  # splits vector data into x,y and z matrices
-    gridToVTK(data[4],      # filename
-              data[0][0],   # x-data
-              data[0][1],   # y-data
-              data[0][2],   # z-data
-              start=(vectors_split_tuple[0].shape[0] * data[5], 0, 0),
-              pointdata={"vectors": vectors_split_tuple, "RGB": values_split_tuple, "coherence": data[3]}
-              )
-
 def nifti_write(volume, data, save_filename, sigma, rho, split_axis):
     # Function saves results in a new directory as a nifti files
     # Input:
@@ -370,17 +263,33 @@ def chunk_split(volume, split_amount, padding):
 
 if __name__ == '__main__':
 
-    sigma = 1 # noise scale
-    rho = 10 # integration scale
-    save_as_tvk = False    # Change to True if wanted to save results as tvk and nifti file
+    #sigma = 1 # noise scale
+    #rho = 10 # integration scale
+    #save_as_tvk = False    # Change to True if wanted to save results as tvk and nifti file
     #                        (WARNING: program takes alot longer to run)
+    if len(sys.argv) < 3:
+        # check variables for sigma, rho and 'save as VTK' have been input
+        sys.exit('\033[93m'+\
+                 'Please enter a value for ' + '\033[95m'+\
+                 'sigma' + '\033[93m'+ ' and ' + '\033[95m'+ 'rho' + '\033[93m' +\
+                 ' followed by '+ '\033[95m'+ 'True' + '\033[93m'+\
+                 ' or ' + '\033[95m'+ 'False' + '\033[93m'+\
+                 ' after function name e.g. dataProcessing3d.py 1 10 False' +'\033[0m')
+
+    sigma = int(sys.argv[1])
+    rho = int(sys.argv[2])
+    print(f'Sigma = {sigma}')
+    print(f'Rho = {rho}')
 
     # hides root window
     root = tkinter.Tk()
     root.withdraw()
 
     # ask user to select image and load image using ui
-    filename = filedialog.askopenfile(title='select file to process')
+    filename = filedialog.askopenfile(title='Select file to process')
+    if not filename:
+        # handles when askopenfile dialog is closed with "cancel".
+        sys.exit('No file was selected to be processed')
     if filename.name[-4:]=='.nii' or filename.name[-4:]=='i.gz':
         # Reads nifti files
         data_info = nib.load(filename.name)
@@ -391,20 +300,20 @@ if __name__ == '__main__':
         volume = skimage.io.imread(filename.name)   # volume shape = (z,y,x)
         volume = volume.transpose(2, 1, 0)   # reshape to (x,y,z)
         if volume.dtype == 'uint16':
-            # convert image to 8-bit greyscale image if it is 16-bit
+            # convert image to 8-bit greyscale image if it is 16-bit greyscale image
             print('Data imported is of type uint16, converting to uint8')
-            volume /= 256
-            volume = volume.astype('unit8')
-    print(f'data size = {volume.shape}')
+            volume //= 256
+            volume = volume.astype(np.uint8)
+    print(f'Data size = {volume.shape}')
 
     # check sigma and rho is no more than 10% of data size
     smallest_size = min(volume.shape[0], volume.shape[1], volume.shape[2])
     # check sigma value is smaller than 10% of image size
     if not smallest_size * 0.1 >= sigma:
-        sys.exit('sigma value must be smaller than 10% of volume size in all planes')
+        sys.exit('sigma value must be less than 10% of volume dimensions in all planes')
     # check rho value is smaller than 10% of image size
     if not smallest_size * 0.1 >= rho:
-        sys.exit('rho value must be smaller than 10% of volume size in all planes')
+        sys.exit('rho value must be less than 10% of volume dimensions in all planes')
 
     # plot 2D slice of data in 3-planes
     show_slice = False
@@ -416,7 +325,7 @@ if __name__ == '__main__':
         skimage.io.imshow(volume[:, :, 0], ax=ax[2])    # z-axis
 
     # ask user location to save results
-    save_filename = filedialog.asksaveasfilename(title='select location and enter name of file to save results')
+    save_filename = filedialog.asksaveasfilename(title='Select location and enter name of file to save results')
     root.destroy()
     if save_filename == '':  # asksaveasfile returns `none` if dialog closed with "cancel".
         sys.exit('No file name or location was selected to save results')
@@ -490,19 +399,6 @@ if __name__ == '__main__':
         t2 = time.perf_counter()  # stop time
         print(f'finished calculating fa in {t2 - t1} seconds')
 
-        # calls function to assign rgb value to each eigenvector and display results
-        # show_vol_orientation(chunk, vec, fa_result, coloring=colouring)
-        if save_as_tvk:
-            rgba = colouring(vec, fa_result)
-            rgb = np.zeros((rgba.shape[0], rgba.shape[1], rgba.shape[2], 3))
-            rgb[..., 0] = rgba[..., 0]       # red channel
-            rgb[..., 1] = rgba[..., 1]       # green channel
-            rgb[..., 2] = rgba[..., 2]       # blue channel
-            rgb *= 255                      # normalise data
-            rgb = rgb.astype(np.uint8)  # convert to uint8 to reduce file size
-        else:
-            rgb = np.nan
-
         # store all data in a list
         final_data[inds] = {'coh': coh_result,
                             'vector': vec,
@@ -510,22 +406,16 @@ if __name__ == '__main__':
                             'order': order,
                             'chunk_z_spacing': chunk_amount_z,
                             'fa': fa_result,
-                            'rgb': rgb}
-        del coh_result, vec, val, fa_result, rgb    # save some memory by removing duplicate data
+                            }
+        del coh_result, vec, val, fa_result   # save some memory by removing duplicate data
 
     # write results to file
     print('saving results to file...')
-    if save_as_tvk:
-        # saves data as tvk file(s)
-        for ijj in tqdm(range(split_amount)):
-           write_tvk_file(final_data[ijj]['coh'], final_data[ijj]['vector'], final_data[ijj]['rgb'], 1, save_filename,
-                           final_data[ijj]['order'], final_data[ijj]['chunk_z_spacing'], sigma, rho, pool)
-
     nifti_write(volume, final_data, save_filename, sigma, rho, split_axis)    # Saves data in nifti format
 
 
     print(f'data saved in: {save_filename}')
     pool.close()
     pool.join()
-    print('finished - program end')
+    print('Finished - Program End')
     plt.show()
