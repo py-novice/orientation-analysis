@@ -1,6 +1,5 @@
 """
 3D_Data_Processing
-Version 6.0
 Date: 31/08/2022
 Created by Simon Burt in accordance with the MSc Individual Project
 
