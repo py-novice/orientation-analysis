@@ -3,7 +3,8 @@
 Version 6.0
 Date: 31/08/2022
 Created by Simon Burt in accordance with the MSc Individual Project
-Key feature of this version - Ability to read nifti files for processing
+
+Program to analyse orientation of 3D HiP-CT data.
 """
 import time
 import sys
@@ -20,7 +21,6 @@ from structure_tensor import parallel_structure_tensor_analysis
 from pyevtk.hl import gridToVTK
 import matplotlib.pyplot as plt
 import nibabel as nib
-import tifffile
 
 
 def write_tvk_file(coh, vec, val, step, save_filename, order, chunk_z_spacing, sigma, rho, pool):
@@ -64,21 +64,21 @@ def write_tvk_file(coh, vec, val, step, save_filename, order, chunk_z_spacing, s
     pts[..., 0] = x
     pts[..., 1] = y
     pts[..., 2] = z
-    pts = pts.transpose(3, 0, 1, 2).copy()  # re-orders matrix so x first, y next and z last.
+    pts = pts.transpose(3, 0, 1, 2)  # re-orders matrix so x first, y next and z last.
 
     # arranges vector field data into correct format
     vectors = np.empty(z.shape + (3,), dtype=np.float32)
     vectors[..., 0] = vx
     vectors[..., 1] = vy
     vectors[..., 2] = vz
-    vectors = vectors.transpose(3, 0, 1, 2).copy()
+    vectors = vectors.transpose(3, 0, 1, 2)
 
     # arranges eigen-value data into correct format
     values = np.empty(z.shape + (3,), dtype=np.float32)
     values[..., 0] = val_major
     values[..., 1] = val_minor1
     values[..., 2] = val_minor2
-    values = values.transpose(3, 0, 1, 2).copy()
+    values = values.transpose(3, 0, 1, 2)
 
     # estimate size of results data to determine number of files to save processed data into
     results_memory_size = (sys.getsizeof(pts)/ 1e6)*3  # estimates memory size of results and converts to mb
@@ -91,7 +91,7 @@ def write_tvk_file(coh, vec, val, step, save_filename, order, chunk_z_spacing, s
 
     if multi_file:
         # save data as multiple tvk files if too large
-        # split data into sub-sections along the x-axis
+        # split data into subsections along the x-axis
         pts_split = np.array_split(pts, split_amount, axis=1)
         vectors_split = np.array_split(vectors, split_amount, axis=1)
         values_split = np.array_split(values, split_amount, axis=1)
@@ -100,16 +100,19 @@ def write_tvk_file(coh, vec, val, step, save_filename, order, chunk_z_spacing, s
         # create list of tuples containing split data
         data= [None]*split_amount   # create empty list
         for ij in range(split_amount):
-            save_filename_split = save_filename + "_processed_sigma=" + str(sigma) + "_rho=" + str(rho) + "_chunk" + str(order+1) +\
-                                  "_file" + str(ij+1)  # generates unique file name
+            save_filename_split = save_filename + "_processed_sigma=" + str(sigma) +\
+                                  "_rho=" + str(rho) + "_chunk" + str(order+1) +\
+                                  "_file" + str(ij+1)   # generates unique file name
             itr = int(ij)
-            data[ij] = (pts_split[ij], vectors_split[ij], values_split[ij], coherence_split[ij], save_filename_split, itr)
+            data[ij] = (pts_split[ij], vectors_split[ij], values_split[ij], coherence_split[ij],
+                        save_filename_split, itr)
 
         for ik in tqdm(range(split_amount)):
             tvk_write(data[ik])
 
     else:
-        save_filename = save_filename + "_processed_sigma=" + str(sigma) + "_rho=" + str(rho) + "_chunk" + str(order + 1)  # generates unique file name
+        save_filename = save_filename + "_processed_sigma=" + str(sigma) + "_rho=" + str(rho) +\
+                        "_chunk" + str(order + 1)  # generates unique file name
         data = [None]
         data = (pts, vectors, values, coherence, save_filename, 0)
         tvk_write(data)
@@ -233,6 +236,7 @@ def coherence(val):
     a += tmp[3]
     a **= 0.5
     np.divide(tmp[0], a, out=c_s, where=a != 0)
+
     # compute c_a
     np.subtract(1, c_s, out=c_a)
     del tmp
@@ -241,7 +245,8 @@ def coherence(val):
 def fractional_anisotropy(val):
     # function calculates fractional anisotropy
     # Based on the following formula:
-    # fa = (1/2)**0.5 * ((eigval1 - eigval2)**2 + (eigval2-eigval3)**2 + (eigval3 - eigval1)**2)** 0.5/(eigval1 ** 2 + eigval2 ** 2 + eigval3 ** 2)) ** 0.5
+    # fa = (1/2)**0.5 * ((eigval1 - eigval2)**2 + (eigval2-eigval3)**2 + (eigval3 - eigval1)**2)** 0.5/
+    #       (eigval1 ** 2 + eigval2 ** 2 + eigval3 ** 2)) ** 0.5
 
     # Flatten val
     input_shape = val.shape
@@ -276,6 +281,7 @@ def fractional_anisotropy(val):
 
 def colouring(vec, fa):
     # function to assign rgba value to data
+
     vec = abs(vec)  # negative numbers don't matter for assigning colour
     vec[~np.isfinite(vec)] = np.nan  # Replaces any inf values with nan
 
@@ -302,7 +308,7 @@ def colouring(vec, fa):
     rgba[..., 2] = b.reshape(input_shape[1:])
     rgba[..., 3] = a
     # rgba *= 255  # normalise data
-    rgba = rgba.astype(np.uint8)  # convert to uint8 to reduce file size
+    rgba = rgba.astype(np.uint8)  # convert to uint8 to reduce array size
     del tmp
     return rgba
 
@@ -320,7 +326,7 @@ def chunk_split(volume, split_amount, padding):
     #       volume_chunk = list containing multiple numpy arrays of the chunks.
     #       chunk_amount_z = tuple containing the z-dimension of the every chunk the data was split into.
 
-    # Determine largest axis and split data along it
+    # Determine the largest axis and split data along it
     if volume.shape[0] >= volume.shape[1] and volume.shape[0] >= volume.shape[2]:
         split_axis = 0
     elif volume.shape[1] >= volume.shape[0] and volume.shape[1] >= volume.shape[2]:
@@ -328,7 +334,8 @@ def chunk_split(volume, split_amount, padding):
     else:
         split_axis = 2
 
-    chunk_amount_z = tuple([volume.shape[split_axis] // split_amount + int(x < volume.shape[split_axis] % split_amount) for x in range(split_amount)])
+    chunk_amount_z = tuple([volume.shape[split_axis] // split_amount + int(x < volume.shape[split_axis] % split_amount)
+                            for x in range(split_amount)])
     volume_chunks = [None] * split_amount  # initialise variable
     for iz in range(split_amount):
         if iz == 0:
@@ -343,7 +350,8 @@ def chunk_split(volume, split_amount, padding):
         elif iz == (split_amount - 1):
             # deals with last chunk
             volume_chunks[iz] = {
-                                'data': array_slice(volume, split_axis, (previous_finish - padding), (previous_finish + chunk_amount_z[iz])),
+                                'data': array_slice(volume, split_axis, (previous_finish - padding),
+                                                    (previous_finish + chunk_amount_z[iz])),
                                 'order': int(iz),
                                 'padding_start': padding,
                                 'padding_end': 0
@@ -351,7 +359,8 @@ def chunk_split(volume, split_amount, padding):
         else:
             # deals with all other chunks
             volume_chunks[iz] = {
-                                'data': array_slice(volume, split_axis, (previous_finish - padding),(previous_finish + chunk_amount_z[iz] + padding)),
+                                'data': array_slice(volume, split_axis, (previous_finish - padding),
+                                                    (previous_finish + chunk_amount_z[iz] + padding)),
                                 'order': int(iz),
                                 'padding_start': padding,
                                 'padding_end': padding
@@ -364,7 +373,8 @@ if __name__ == '__main__':
 
     sigma = 1 # noise scale
     rho = 10 # integration scale
-    save_as_tvk = False    # True - if want to save results as tvk and nifti file (program takes longer to run)
+    save_as_tvk = False    # Change to True if wanted to save results as tvk and nifti file
+    #                        (WARNING: program takes alot longer to run)
 
     # hides root window
     root = tkinter.Tk()
@@ -397,8 +407,8 @@ if __name__ == '__main__':
     if not smallest_size * 0.1 >= rho:
         sys.exit('rho value must be smaller than 10% of volume size in all planes')
 
-    # plot 2d slice of data in 3-planes
-    show_slice= False
+    # plot 2D slice of data in 3-planes
+    show_slice = False
     if show_slice:
         plt.figure()
         fig, ax = plt.subplots(3, 1, figsize=(10, 10))
@@ -409,8 +419,8 @@ if __name__ == '__main__':
     # ask user location to save results
     save_filename = filedialog.asksaveasfilename(title='select location and enter name of file to save results')
     root.destroy()
-    if save_filename == '':  # asksaveasfile return `none` if dialog closed with "cancel".
-        sys.exit('no file name or location was selected to save results')
+    if save_filename == '':  # asksaveasfile returns `none` if dialog closed with "cancel".
+        sys.exit('No file name or location was selected to save results')
 
     # check to see if data needs splitting into chunks for processing
     if volume.size >= 160000000:
@@ -447,9 +457,9 @@ if __name__ == '__main__':
         print(f'calculating structure tensor for chunk {order+1}...')
         t1 = time.perf_counter()  # start time
         s, vec, val = parallel_structure_tensor_analysis(chunk, sigma, rho,
-                                                         structure_tensor=True) # vec has shape =(3,x,y,z) in the order of (z,y,x)
+                                                         structure_tensor=True)  # vec has shape =(3,x,y,z) in the order of (z,y,x)
 
-        # remove padding from st, e'values & e'vectors if data is chunked
+        # remove padding from st, eiganvalues & eiganvectors if data is chunked
         if chunked_data:
             array_end = s.shape[split_axis+1] - padding_end
             s = array_slice(s, split_axis+1, padding_start, array_end)
@@ -457,7 +467,7 @@ if __name__ == '__main__':
             val = array_slice(val, split_axis+1, padding_start, array_end)
 
         t2 = time.perf_counter()  # stop time
-        del s   # save some memory as no longer needed
+        del s   # saves memory as no longer needed
         print(f'finished calculating structure tensors in {t2 - t1} seconds')
 
         # call function to calculate coherency
@@ -513,7 +523,6 @@ if __name__ == '__main__':
                            final_data[ijj]['order'], final_data[ijj]['chunk_z_spacing'], sigma, rho, pool)
 
     nifti_write(volume, final_data, save_filename, sigma, rho, split_axis)    # Saves data in nifti format
-
 
 
     print(f'data saved in: {save_filename}')
